@@ -1,0 +1,164 @@
+import os
+import sys
+import json
+import urllib.request
+import urllib.parse
+from typing import List, Optional, Dict, Any
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+from nitrostack.core.module import module
+from nitrostack.core.di import DIContainer
+
+class OAuthService:
+    def __init__(
+        self,
+        resource_uri: str,
+        authorization_servers: List[str],
+        scopes_supported: List[str],
+        token_introspection_endpoint: Optional[str] = None,
+        token_introspection_client_id: Optional[str] = None,
+        token_introspection_client_secret: Optional[str] = None,
+        discovery_port: int = 3005,
+    ):
+        self.resource_uri = resource_uri
+        self.authorization_servers = authorization_servers
+        self.scopes_supported = scopes_supported
+        self.token_introspection_endpoint = token_introspection_endpoint
+        self.token_introspection_client_id = token_introspection_client_id
+        self.token_introspection_client_secret = token_introspection_client_secret
+        self.discovery_port = discovery_port
+        self._server: Optional[HTTPServer] = None
+        self._thread: Optional[threading.Thread] = None
+
+    def start_discovery_server(self) -> None:
+        """Starts a background HTTP discovery server for OAuth Protected Resource metadata."""
+        if self._server is not None:
+            return
+
+        service_instance = self
+
+        class DiscoveryHandler(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):
+                # Suppress server logging to stdout/stderr to keep stdio clean
+                pass
+
+            def do_GET(self):
+                if self.path == "/.well-known/oauth-protected-resource":
+                    response_data = {
+                        "resource": service_instance.resource_uri,
+                        "authorization_servers": service_instance.authorization_servers,
+                        "scopes_supported": service_instance.scopes_supported
+                    }
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response_data).encode("utf-8"))
+                elif self.path == "/.well-known/oauth-authorization-server":
+                    # Mock/basic authorization server metadata if query hits this resource
+                    response_data = {
+                        "issuer": service_instance.authorization_servers[0] if service_instance.authorization_servers else "http://localhost",
+                        "token_endpoint": service_instance.token_introspection_endpoint or "",
+                        "introspection_endpoint": service_instance.token_introspection_endpoint or ""
+                    }
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response_data).encode("utf-8"))
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+        def run_server():
+            # Try binding to OAUTH_DISCOVERY_PORT
+            port = int(os.environ.get("OAUTH_DISCOVERY_PORT", self.discovery_port))
+            try:
+                self._server = HTTPServer(("localhost", port), DiscoveryHandler)
+                # Notify client via stderr
+                oauth_metadata = {
+                    "port": port,
+                    "resource_uri": self.resource_uri,
+                    "authorization_servers": self.authorization_servers
+                }
+                sys.stderr.write(
+                    f"[NITROSTACK_OAUTH]{json.dumps(oauth_metadata)}[/NITROSTACK_OAUTH]\n"
+                )
+                sys.stderr.flush()
+                self._server.serve_forever()
+            except Exception as e:
+                sys.stderr.write(f"Failed to start OAuth Discovery Server on port {port}: {e}\n")
+                sys.stderr.flush()
+
+        self._thread = threading.Thread(target=run_server, daemon=True)
+        self._thread.start()
+
+    def stop_discovery_server(self) -> None:
+        if self._server:
+            self._server.shutdown()
+            self._server = None
+        if self._thread:
+            self._thread.join(timeout=1.0)
+            self._thread = None
+
+    async def introspect_token(self, token: str) -> Dict[str, Any]:
+        """
+        Validates token using RFC 7662 token introspection endpoint.
+        """
+        if not self.token_introspection_endpoint:
+            # If no introspection endpoint is configured, mock active check for local debugging
+            # A real deployment must provide an introspection endpoint.
+            sys.stderr.write("OAuth Warning: No token_introspection_endpoint configured. Assuming mock active.\n")
+            return {"active": True, "scope": " ".join(self.scopes_supported), "sub": "mock-user"}
+
+        # Perform HTTP POST request
+        data = urllib.parse.urlencode({"token": token}).encode("utf-8")
+        req = urllib.request.Request(self.token_introspection_endpoint, data=data, method="POST")
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+        
+        # Add basic auth if client credentials provided
+        if self.token_introspection_client_id and self.token_introspection_client_secret:
+            import base64
+            auth_str = f"{self.token_introspection_client_id}:{self.token_introspection_client_secret}"
+            encoded_auth = base64.b64encode(auth_str.encode("utf-8")).decode("utf-8")
+            req.add_header("Authorization", f"Basic {encoded_auth}")
+
+        try:
+            # We run in a threadpool or run_in_executor to avoid blocking async loop
+            # But standard library urllib.request is synchronous, so let's run it synchronously in context
+            # (or use asyncio loop.run_in_executor if we are in async method).
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            def do_request():
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            
+            return await loop.run_in_executor(None, do_request)
+        except Exception as e:
+            sys.stderr.write(f"OAuth Introspection Request Failed: {e}\n")
+            sys.stderr.flush()
+            return {"active": False}
+
+@module(name="OAuthModule")
+class OAuthModule:
+    @classmethod
+    def for_root(
+        cls,
+        resource_uri: str,
+        authorization_servers: List[str],
+        scopes_supported: List[str],
+        token_introspection_endpoint: Optional[str] = None,
+        token_introspection_client_id: Optional[str] = None,
+        token_introspection_client_secret: Optional[str] = None,
+        discovery_port: int = 3005,
+    ):
+        service = OAuthService(
+            resource_uri=resource_uri,
+            authorization_servers=authorization_servers,
+            scopes_supported=scopes_supported,
+            token_introspection_endpoint=token_introspection_endpoint,
+            token_introspection_client_id=token_introspection_client_id,
+            token_introspection_client_secret=token_introspection_client_secret,
+            discovery_port=discovery_port
+        )
+        DIContainer.get_instance().register_value(OAuthService, service)
+        return cls
