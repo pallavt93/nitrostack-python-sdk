@@ -1,4 +1,5 @@
 PYTHON_SDK_SPEC.md
+README.md
 pyproject.toml
 nitrostack/__init__.py
 nitrostack.egg-info/PKG-INFO
@@ -25,4 +26,6 @@ nitrostack/events/event_emitter.py
 nitrostack/testing/__init__.py
 nitrostack/transports/stdio.py
 tests/test_basic.py
+tests/test_initial_tool.py
+tests/test_production.py
 tests/test_tasks.py

@@ -19,6 +19,9 @@ class OAuthService:
         token_introspection_client_id: Optional[str] = None,
         token_introspection_client_secret: Optional[str] = None,
         discovery_port: int = 3005,
+        jwks_uri: Optional[str] = None,
+        audience: Optional[str] = None,
+        issuer: Optional[str] = None,
     ):
         self.resource_uri = resource_uri
         self.authorization_servers = authorization_servers
@@ -27,6 +30,12 @@ class OAuthService:
         self.token_introspection_client_id = token_introspection_client_id
         self.token_introspection_client_secret = token_introspection_client_secret
         self.discovery_port = discovery_port
+        
+        # Environmental fallbacks
+        self.jwks_uri = jwks_uri or os.environ.get("JWKS_URI")
+        self.audience = audience or os.environ.get("TOKEN_AUDIENCE") or resource_uri
+        self.issuer = issuer or os.environ.get("TOKEN_ISSUER")
+        
         self._server: Optional[HTTPServer] = None
         self._thread: Optional[threading.Thread] = None
 
@@ -101,8 +110,37 @@ class OAuthService:
 
     async def introspect_token(self, token: str) -> Dict[str, Any]:
         """
-        Validates token using RFC 7662 token introspection endpoint.
+        Validates token using JWKS verification or RFC 7662 token introspection.
         """
+        # 1. JWKS Verification if configured
+        if self.jwks_uri:
+            try:
+                import jwt
+                # Parse JWT headers to get kid
+                unverified_headers = jwt.get_unverified_header(token)
+                jwks_client = jwt.PyJWKClient(self.jwks_uri)
+                signing_key = jwks_client.get_signing_key_from_jwt(token)
+                
+                # Verify token signature
+                data = jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=["RS256"],
+                    audience=self.audience,
+                    issuer=self.issuer
+                )
+                return {
+                    "active": True,
+                    "scope": data.get("scope", ""),
+                    "sub": data.get("sub"),
+                    "client_id": data.get("client_id")
+                }
+            except Exception as e:
+                # Log signature failure to stderr
+                sys.stderr.write(f"OAuth JWKS verification failed: {e}\n")
+                sys.stderr.flush()
+                return {"active": False}
+
         if not self.token_introspection_endpoint:
             # If no introspection endpoint is configured, mock active check for local debugging
             # A real deployment must provide an introspection endpoint.
@@ -150,6 +188,9 @@ class OAuthModule:
         token_introspection_client_id: Optional[str] = None,
         token_introspection_client_secret: Optional[str] = None,
         discovery_port: int = 3005,
+        jwks_uri: Optional[str] = None,
+        audience: Optional[str] = None,
+        issuer: Optional[str] = None,
     ):
         service = OAuthService(
             resource_uri=resource_uri,
@@ -158,7 +199,10 @@ class OAuthModule:
             token_introspection_endpoint=token_introspection_endpoint,
             token_introspection_client_id=token_introspection_client_id,
             token_introspection_client_secret=token_introspection_client_secret,
-            discovery_port=discovery_port
+            discovery_port=discovery_port,
+            jwks_uri=jwks_uri,
+            audience=audience,
+            issuer=issuer
         )
         DIContainer.get_instance().register_value(OAuthService, service)
         return cls

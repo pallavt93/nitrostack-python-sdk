@@ -66,6 +66,7 @@ from nitrostack.auth.jwt import (
 )
 from nitrostack.auth.oauth import (
     OAuthModule,
+    OAuthService,
 )
 from nitrostack.auth.config import (
     ConfigModule,
@@ -115,6 +116,7 @@ __all__ = [
     "ApiKeyModule",
     "JWTModule",
     "OAuthModule",
+    "OAuthService",
     "ConfigModule",
     "ConfigService",
     "NitroTestingModule",

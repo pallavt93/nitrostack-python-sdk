@@ -37,6 +37,7 @@ FastMCP.call_tool = _custom_fastmcp_call_tool
 class ServerConfig:
     name: str
     version: str = "1.0.0"
+    transport_type: Optional[str] = None
 
 def mcp_app(module: Type, server: ServerConfig):
     """
@@ -619,15 +620,22 @@ async def prompt_wrapper({sig_str}):
     )
     
     mcp_messages = []
-    for msg in raw_messages:
+    from collections.abc import Iterable
+    if not isinstance(raw_messages, Iterable) or isinstance(raw_messages, (dict, str, bytes)):
+        raw_list = [raw_messages]
+    else:
+        raw_list = list(raw_messages)
+        
+    for msg in raw_list:
         role = msg.role if hasattr(msg, "role") else msg.get("role")
         content = msg.content if hasattr(msg, "content") else msg.get("content")
-        mcp_messages.append(
-            McpPromptMessage(
-                role=role,
-                content=TextContent(type="text", text=content)
-            )
-        )
+        mcp_messages.append({{
+            "role": role,
+            "content": {{
+                "type": "text",
+                "text": content
+            }}
+        }})
     return mcp_messages
 """
         exec(code, exec_globals, exec_locals)
@@ -676,7 +684,7 @@ async def prompt_wrapper({sig_str}):
         except Exception:
             pass
 
-        transport = os.environ.get("MCP_TRANSPORT_TYPE")
+        transport = os.environ.get("MCP_TRANSPORT_TYPE") or getattr(self.server_config, "transport_type", None)
         node_env = os.environ.get("NODE_ENV", "development")
         port = int(os.environ.get("PORT") or os.environ.get("MCP_SERVER_PORT") or 8000)
 

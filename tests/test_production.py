@@ -81,8 +81,67 @@ def test_file_logger_customizations():
     if os.path.exists("test_custom_file.log"):
         os.remove("test_custom_file.log")
 
+from nitrostack import ServerConfig, mcp_app, McpApplicationFactory, module, prompt, PromptMessage, OAuthModule, OAuthService
+
+# Test prompt messages wrapping
+@injectable()
+class DummyPromptController:
+    @prompt(
+        name="single_msg_prompt",
+        description="Returns a single message"
+    )
+    async def single_msg(self, args: dict, context: ExecutionContext) -> PromptMessage:
+        return PromptMessage(role="user", content="Hello single!")
+
+@module(name="dummy", controllers=[DummyPromptController])
+class DummyModule:
+    pass
+
+def test_prompt_messages_wrapping():
+    print("\nTesting single prompt message wrapping...")
+    from nitrostack.testing import NitroTestingModule
+    async def run():
+        harness = await NitroTestingModule.create(DummyModule)
+        res = await harness.get_prompt("single_msg_prompt", {})
+        print("DEBUG PROMPT MSG:", res[0])
+        print("DEBUG CONTENT TYPE:", type(res[0].content))
+        print("DEBUG CONTENT TEXT:", getattr(res[0].content, "text", None))
+        assert isinstance(res, list)
+        assert len(res) == 1
+        assert getattr(res[0].content, "text", None) == "Hello single!"
+    asyncio.run(run())
+    print("Success! Single prompt message result was wrapped into a list.")
+
+def test_server_config_transport_override():
+    print("\nTesting ServerConfig transport_type override...")
+    cfg = ServerConfig(name="test", transport_type="http")
+    assert cfg.transport_type == "http"
+    print("Success! transport_type attribute correctly set in ServerConfig.")
+
+def test_oauth_jwks_configuration():
+    print("\nTesting OAuthModule JWKS parameter configuration...")
+    os.environ["JWKS_URI"] = "https://example.com/keys"
+    os.environ["TOKEN_AUDIENCE"] = "my-audience"
+    os.environ["TOKEN_ISSUER"] = "my-issuer"
+    
+    DIContainer.reset()
+    OAuthModule.for_root(
+        resource_uri="mcp://test",
+        authorization_servers=["https://example.com"],
+        scopes_supported=["read"]
+    )
+    
+    svc = DIContainer.get_instance().resolve(OAuthService)
+    assert svc.jwks_uri == "https://example.com/keys"
+    assert svc.audience == "my-audience"
+    assert svc.issuer == "my-issuer"
+    print("Success! OAuth jwks_uri, audience, and issuer correctly configured via env variables.")
+
 if __name__ == "__main__":
     test_custom_di_exceptions()
     test_custom_config_exceptions()
     test_file_logger_customizations()
+    test_prompt_messages_wrapping()
+    test_server_config_transport_override()
+    test_oauth_jwks_configuration()
     print("\nAll production readiness tests passed successfully!")
