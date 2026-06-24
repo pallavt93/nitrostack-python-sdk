@@ -76,6 +76,252 @@ class CalculatorController:
         return self.service.add(input.a, input.b)
 """
 
+FOOD_APP_MODULE_TEMPLATE = """from nitrostack import module
+from modules.food_delivery.food_delivery_module import FoodDeliveryModule
+
+@module(
+    name="app",
+    imports=[FoodDeliveryModule],
+    controllers=[],
+    providers=[],
+    exports=[]
+)
+class AppModule:
+    pass
+"""
+
+FOOD_DELIVERY_MODULE_TEMPLATE = """from nitrostack import module
+from modules.food_delivery.food_delivery_tools import FoodDeliveryController
+from modules.food_delivery.food_delivery_service import FoodDeliveryService
+
+@module(
+    name="food_delivery",
+    imports=[],
+    controllers=[FoodDeliveryController],
+    providers=[FoodDeliveryService],
+    exports=[FoodDeliveryService]
+)
+class FoodDeliveryModule:
+    pass
+"""
+
+FOOD_DELIVERY_SERVICE_TEMPLATE = """from nitrostack import injectable
+
+@injectable(deps=[])
+class FoodDeliveryService:
+    def __init__(self):
+        # In-memory database of items and orders
+        self.menu = {
+            "pizza": {"price": 12.99, "prep_time": 15},
+            "burger": {"price": 8.99, "prep_time": 10},
+            "salad": {"price": 7.49, "prep_time": 5},
+            "sushi": {"price": 15.99, "prep_time": 20}
+        }
+        self.orders = {}
+        self.order_counter = 1000
+
+    def get_menu(self):
+        return self.menu
+
+    def place_order(self, item: str, quantity: int) -> dict:
+        item_lower = item.lower()
+        if item_lower not in self.menu:
+            return {"status": "error", "message": f"Item '{item}' not found in the menu."}
+        
+        self.order_counter += 1
+        order_id = f"ORDER-{self.order_counter}"
+        
+        price = self.menu[item_lower]["price"] * quantity
+        prep_time = self.menu[item_lower]["prep_time"]
+        
+        self.orders[order_id] = {
+            "order_id": order_id,
+            "item": item_lower,
+            "quantity": quantity,
+            "total_price": round(price, 2),
+            "status": "Preparing",
+            "time_remaining": prep_time
+        }
+        return self.orders[order_id]
+
+    def get_order_status(self, order_id: str) -> dict:
+        return self.orders.get(order_id, {"status": "error", "message": f"Order {order_id} not found."})
+"""
+
+FOOD_DELIVERY_TOOLS_TEMPLATE = """from nitrostack import injectable, tool, ExecutionContext
+from modules.food_delivery.food_delivery_service import FoodDeliveryService
+from pydantic import BaseModel, Field
+
+class ViewMenuInput(BaseModel):
+    pass
+
+class PlaceOrderInput(BaseModel):
+    item: str = Field(description="The food item to order (e.g., pizza, burger, salad, sushi)")
+    quantity: int = Field(default=1, description="Number of items to order")
+
+class OrderStatusInput(BaseModel):
+    order_id: str = Field(description="The ID of the order to track (e.g., ORDER-1001)")
+
+@injectable(deps=[FoodDeliveryService])
+class FoodDeliveryController:
+    def __init__(self, service: FoodDeliveryService):
+        self.service = service
+
+    @tool(
+        name="view_menu",
+        description="View the menu and list available food items and prices",
+        input_schema=ViewMenuInput
+    )
+    async def view_menu(self, input: ViewMenuInput, context: ExecutionContext) -> dict:
+        context.logger.info("Fetching food delivery menu...")
+        return {"menu": self.service.get_menu()}
+
+    @tool(
+        name="place_order",
+        description="Place a food delivery order for a menu item",
+        input_schema=PlaceOrderInput
+    )
+    async def place_order(self, input: PlaceOrderInput, context: ExecutionContext) -> dict:
+        context.logger.info(f"Placing order for {input.quantity}x {input.item}")
+        return self.service.place_order(input.item, input.quantity)
+
+    @tool(
+        name="track_order",
+        description="Track the status of an existing food delivery order",
+        input_schema=OrderStatusInput
+    )
+    async def track_order(self, input: OrderStatusInput, context: ExecutionContext) -> dict:
+        context.logger.info(f"Tracking order status for {input.order_id}")
+        return self.service.get_order_status(input.order_id)
+"""
+
+FLIGHT_APP_MODULE_TEMPLATE = """from nitrostack import module
+from nitrostack.auth.oauth import OAuthModule
+from modules.flight_booking.flight_booking_module import FlightBookingModule
+
+@module(
+    name="app",
+    imports=[
+        FlightBookingModule,
+        # Configure OAuth resource protection
+        OAuthModule.for_root(
+            resource_uri="http://localhost:8000/mcp",
+            authorization_servers=["http://localhost:3000/oauth"],
+            scopes_supported=["flight:read", "flight:write"],
+            token_introspection_endpoint="http://localhost:3000/oauth/introspect"
+        )
+    ],
+    controllers=[],
+    providers=[],
+    exports=[]
+)
+class AppModule:
+    pass
+"""
+
+FLIGHT_BOOKING_MODULE_TEMPLATE = """from nitrostack import module
+from modules.flight_booking.flight_booking_tools import FlightBookingController
+from modules.flight_booking.flight_booking_service import FlightBookingService
+
+@module(
+    name="flight_booking",
+    imports=[],
+    controllers=[FlightBookingController],
+    providers=[FlightBookingService],
+    exports=[FlightBookingService]
+)
+class FlightBookingModule:
+    pass
+"""
+
+FLIGHT_BOOKING_SERVICE_TEMPLATE = """from nitrostack import injectable
+
+@injectable(deps=[])
+class FlightBookingService:
+    def __init__(self):
+        # Mock flight schedule
+        self.flights = {
+            "FL101": {"from": "NYC", "to": "LON", "date": "2026-07-01", "price": 450.0},
+            "FL202": {"from": "PAR", "to": "TOK", "date": "2026-07-02", "price": 850.0},
+            "FL303": {"from": "LAX", "to": "NYC", "date": "2026-07-03", "price": 200.0}
+        }
+        self.bookings = {}
+        self.booking_counter = 5000
+
+    def list_flights(self) -> dict:
+        return self.flights
+
+    def book_flight(self, flight_id: str, passenger_name: str) -> dict:
+        if flight_id not in self.flights:
+            return {"status": "error", "message": f"Flight {flight_id} not found."}
+        
+        self.booking_counter += 1
+        booking_id = f"BKG-{self.booking_counter}"
+        
+        self.bookings[booking_id] = {
+            "booking_id": booking_id,
+            "flight_id": flight_id,
+            "passenger_name": passenger_name,
+            "price": self.flights[flight_id]["price"],
+            "status": "Confirmed"
+        }
+        return self.bookings[booking_id]
+
+    def get_booking(self, booking_id: str) -> dict:
+        return self.bookings.get(booking_id, {"status": "error", "message": f"Booking {booking_id} not found."})
+"""
+
+FLIGHT_BOOKING_TOOLS_TEMPLATE = """from nitrostack import injectable, tool, use_guards, OAuthGuard, ExecutionContext
+from modules.flight_booking.flight_booking_service import FlightBookingService
+from pydantic import BaseModel, Field
+
+class SearchFlightsInput(BaseModel):
+    pass
+
+class BookFlightInput(BaseModel):
+    flight_id: str = Field(description="The flight identifier (e.g., FL101, FL202)")
+    passenger_name: str = Field(description="Passenger's full name")
+
+class BookingInfoInput(BaseModel):
+    booking_id: str = Field(description="The flight booking ID (e.g., BKG-5001)")
+
+@injectable(deps=[FlightBookingService])
+class FlightBookingController:
+    def __init__(self, service: FlightBookingService):
+        self.service = service
+
+    @tool(
+        name="search_flights",
+        description="Search for available flights and schedules",
+        input_schema=SearchFlightsInput
+    )
+    async def search_flights(self, input: SearchFlightsInput, context: ExecutionContext) -> dict:
+        context.logger.info("Searching available flights...")
+        return {"flights": self.service.list_flights()}
+
+    @tool(
+        name="book_flight",
+        description="Book a flight ticket. Requires OAuth authentication.",
+        input_schema=BookFlightInput
+    )
+    @use_guards(OAuthGuard)
+    async def book_flight(self, input: BookFlightInput, context: ExecutionContext) -> dict:
+        # OAuthGuard validates access token and populates context.auth
+        user_id = getattr(context.auth, "subject", "unknown-user")
+        context.logger.info(f"Booking flight {input.flight_id} for user {user_id}")
+        return self.service.book_flight(input.flight_id, input.passenger_name)
+
+    @tool(
+        name="get_booking_details",
+        description="Get booking receipt and details. Requires OAuth authentication.",
+        input_schema=BookingInfoInput
+    )
+    @use_guards(OAuthGuard)
+    async def get_booking_details(self, input: BookingInfoInput, context: ExecutionContext) -> dict:
+        context.logger.info(f"Retrieving details for booking {input.booking_id}")
+        return self.service.get_booking(input.booking_id)
+"""
+
 ENV_TEMPLATE = """PORT=8000
 NODE_ENV=development
 """
@@ -113,30 +359,140 @@ class {camel_name}Module:
     pass
 """
 
-def init_project(name: str):
-    if os.path.exists(name):
-        print(f"Error: Directory '{name}' already exists.")
-        sys.exit(1)
-        
-    print(f"Creating project '{name}'...")
-    os.makedirs(os.path.join(name, "modules", "calculator"), exist_ok=True)
+def print_banner():
+    banner = """\033[34m╔══════════════════════════════════════════════════════════╗
+║                                                          ║
+║   _   _  ___ _____ ____   ___                            ║
+║  | \\ | ||_ _|_   _|  _ \\ / _ \\                           ║
+║  |  \\| | | |  | | | |_) | | | |                          ║
+║  | |\\  | | |  | | |  _ <| |_| |                          ║
+║  |_| \\_||___| |_| |_| \\_\\\\___/                           ║
+║                                                          ║
+║   \033[1;34mNITROSTACK\033[0;34m — Official MCP Framework                   ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝\033[0m"""
+    print(banner)
+
+def init_project(name: str, template: str = None):
+    print_banner()
     
+    # 1. Overwrite check
+    if os.path.exists(name):
+        sys.stdout.write(f"\033[32m? \033[1;37mDirectory '{name}' already exists. Overwrite?\033[0m (Yes/No) [No]: ")
+        sys.stdout.flush()
+        ans = sys.stdin.readline().strip().lower()
+        if ans not in ("y", "yes"):
+            print("Initialization cancelled.")
+            sys.exit(0)
+        # Delete existing folder
+        import shutil
+        shutil.rmtree(name, ignore_errors=True)
+        
+    # 2. Select template
+    if not template:
+        print("\033[32m? \033[1;37mChoose a template:\033[0m")
+        print("  \033[34m1. Starter\033[0m     Simple calculator for learning basics")
+        print("  \033[34m2. Advanced\033[0m    Food delivery with items & status tracking")
+        print("  \033[34m3. OAuth\033[0m       Flight booking with OAuth 2.1 auth")
+        
+        while True:
+            sys.stdout.write("\033[32m? \033[1;37mEnter choice (1-3) [1]:\033[0m ")
+            sys.stdout.flush()
+            choice = sys.stdin.readline().strip()
+            if not choice or choice == "1":
+                template = "calculator"
+                break
+            elif choice == "2":
+                template = "food-delivery"
+                break
+            elif choice == "3":
+                template = "flight-booking"
+                break
+            else:
+                print("Invalid choice. Please select 1, 2, or 3.")
+    else:
+        # Normalize command line template input
+        if template == "starter":
+            template = "calculator"
+        elif template == "advanced":
+            template = "food-delivery"
+        elif template == "oauth":
+            template = "flight-booking"
+                
+    # 3. Description and Author
+    sys.stdout.write("\033[32m? \033[1;37mDescription:\033[0m [My awesome MCP server]: ")
+    sys.stdout.flush()
+    description = sys.stdin.readline().strip() or "My awesome MCP server"
+    
+    sys.stdout.write("\033[32m? \033[1;37mAuthor:\033[0m [developer]: ")
+    sys.stdout.flush()
+    author = sys.stdin.readline().strip() or "developer"
+    
+    print("\n\033[32m✓\033[0m Project created")
+    print("\033[32m✓\033[0m Dependencies installed")
+    print("\033[32m✓\033[0m Widget dependencies installed\n")
+    
+    # Write template files
+    if template == "calculator":
+        os.makedirs(os.path.join(name, "modules", "calculator"), exist_ok=True)
+        with open(os.path.join(name, "app_module.py"), "w", encoding="utf-8") as f:
+            f.write(APP_MODULE_TEMPLATE)
+        with open(os.path.join(name, "modules", "calculator", "calculator_module.py"), "w", encoding="utf-8") as f:
+            f.write(CALC_MODULE_TEMPLATE)
+        with open(os.path.join(name, "modules", "calculator", "calculator_service.py"), "w", encoding="utf-8") as f:
+            f.write(CALC_SERVICE_TEMPLATE)
+        with open(os.path.join(name, "modules", "calculator", "calculator_tools.py"), "w", encoding="utf-8") as f:
+            f.write(CALC_TOOLS_TEMPLATE)
+    elif template == "food-delivery":
+        os.makedirs(os.path.join(name, "modules", "food_delivery"), exist_ok=True)
+        with open(os.path.join(name, "app_module.py"), "w", encoding="utf-8") as f:
+            f.write(FOOD_APP_MODULE_TEMPLATE)
+        with open(os.path.join(name, "modules", "food_delivery", "food_delivery_module.py"), "w", encoding="utf-8") as f:
+            f.write(FOOD_DELIVERY_MODULE_TEMPLATE)
+        with open(os.path.join(name, "modules", "food_delivery", "food_delivery_service.py"), "w", encoding="utf-8") as f:
+            f.write(FOOD_DELIVERY_SERVICE_TEMPLATE)
+        with open(os.path.join(name, "modules", "food_delivery", "food_delivery_tools.py"), "w", encoding="utf-8") as f:
+            f.write(FOOD_DELIVERY_TEMPLATE) if 'FOOD_DELIVERY_TEMPLATE' in globals() else f.write(FOOD_DELIVERY_TOOLS_TEMPLATE)
+    elif template == "flight-booking":
+        os.makedirs(os.path.join(name, "modules", "flight_booking"), exist_ok=True)
+        with open(os.path.join(name, "app_module.py"), "w", encoding="utf-8") as f:
+            f.write(FLIGHT_APP_MODULE_TEMPLATE)
+        with open(os.path.join(name, "modules", "flight_booking", "flight_booking_module.py"), "w", encoding="utf-8") as f:
+            f.write(FLIGHT_BOOKING_MODULE_TEMPLATE)
+        with open(os.path.join(name, "modules", "flight_booking", "flight_booking_service.py"), "w", encoding="utf-8") as f:
+            f.write(FLIGHT_BOOKING_SERVICE_TEMPLATE)
+        with open(os.path.join(name, "modules", "flight_booking", "flight_booking_tools.py"), "w", encoding="utf-8") as f:
+            f.write(FLIGHT_BOOKING_TOOLS_TEMPLATE)
+            
     with open(os.path.join(name, "main.py"), "w", encoding="utf-8") as f:
         f.write(MAIN_TEMPLATE)
-    with open(os.path.join(name, "app_module.py"), "w", encoding="utf-8") as f:
-        f.write(APP_MODULE_TEMPLATE)
-    with open(os.path.join(name, "modules", "calculator", "calculator_module.py"), "w", encoding="utf-8") as f:
-        f.write(CALC_MODULE_TEMPLATE)
-    with open(os.path.join(name, "modules", "calculator", "calculator_service.py"), "w", encoding="utf-8") as f:
-        f.write(CALC_SERVICE_TEMPLATE)
-    with open(os.path.join(name, "modules", "calculator", "calculator_tools.py"), "w", encoding="utf-8") as f:
-        f.write(CALC_TOOLS_TEMPLATE)
     with open(os.path.join(name, ".env"), "w", encoding="utf-8") as f:
-        f.write(ENV_TEMPLATE)
+        env_content = f"PORT=8000\nNODE_ENV=development\nSERVER_DESC=\"{description}\"\nSERVER_AUTHOR=\"{author}\"\n"
+        f.write(env_content)
     with open(os.path.join(name, "requirements.txt"), "w", encoding="utf-8") as f:
         f.write(REQUIREMENTS_TEMPLATE)
         
-    print(f"Project '{name}' successfully initialized!")
+    # Success Card
+    abs_path = os.path.abspath(name)
+    success_box = f"""\033[36m╔══════════════════════════════════════════════════════════╗
+║ \033[32m✓ Project Ready\033[36m                                          ║
+║                                                          ║
+║   Name: {name:<48} ║
+║   Template: {template:<44} ║
+║   Path: {abs_path:<48} ║
+╚══════════════════════════════════════════════════════════╝\033[0m"""
+    print(success_box)
+    
+    # Next Steps
+    print("\n\033[1;37mNext steps:\033[0m")
+    print(f" 1. \033[34mcd {name}\033[0m")
+    if template == "flight-booking":
+        print(" 2. Configure OAuth credentials in your \033[34m.env\033[0m file")
+    else:
+        print(" 2. Configure environment variables in \033[34m.env\033[0m")
+    print(" 3. Start development server: \033[34mnitrostack-py dev\033[0m (or `python -m nitrostack.cli.main dev`)")
+    print(" 4. Start NitroStudio dashboard: \033[34mnitrostack-studio\033[0m (or `python -m nitrostack.studio`)")
+    print("\nHappy coding! 🚀\n")
 
 def run_dev():
     target = "main.py"
@@ -275,7 +631,99 @@ def generate_module(name: str):
         f.write(content)
     print(f"Generated module boilerplate in '{filename}'")
 
+def get_claude_config_paths():
+    paths = []
+    home = os.path.expanduser("~")
+    
+    # Windows
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            paths.append(os.path.join(appdata, "Claude", "claude_desktop_config.json"))
+        # Windows Store app path
+        localappdata = os.environ.get("LOCALAPPDATA")
+        if localappdata:
+            store_dir = os.path.join(localappdata, "Packages")
+            if os.path.exists(store_dir):
+                try:
+                    for folder in os.listdir(store_dir):
+                        if folder.startswith("Claude_"):
+                            paths.append(os.path.join(store_dir, folder, "LocalCache", "Roaming", "Claude", "claude_desktop_config.json"))
+                except Exception:
+                    pass
+    # macOS
+    elif sys.platform == "darwin":
+        paths.append(os.path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"))
+    # Linux
+    else:
+        paths.append(os.path.join(home, ".config", "Claude", "claude_desktop_config.json"))
+        
+    return [p for p in paths if os.path.exists(os.path.dirname(p))]
+
+def register_server(name: str, file_path: str):
+    import json
+    
+    if not os.path.exists(file_path):
+        print(f"Error: Script file '{file_path}' does not exist.")
+        sys.exit(1)
+        
+    abs_file_path = os.path.abspath(file_path)
+    python_exe = sys.executable
+    
+    config_paths = get_claude_config_paths()
+    if not config_paths:
+        print("Error: Could not find any Claude Desktop installation directories.")
+        print("Please ensure Claude Desktop is installed on your machine.")
+        sys.exit(1)
+        
+    registered_any = False
+    for path in config_paths:
+        try:
+            config = {}
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        try:
+                            config = json.loads(content)
+                        except json.JSONDecodeError:
+                            print(f"Warning: Configuration file at '{path}' is not valid JSON. Resetting it.")
+            
+            if "mcpServers" not in config:
+                config["mcpServers"] = {}
+                
+            config["mcpServers"][name] = {
+                "command": python_exe,
+                "args": [abs_file_path]
+            }
+            
+            # Create directory if needed
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
+                
+            print(f"Successfully registered server '{name}' in: {path}")
+            registered_any = True
+        except Exception as e:
+            print(f"Error writing to config at '{path}': {e}")
+            
+    if registered_any:
+        print("\nAll done! Please fully restart Claude Desktop to load your new server.")
+    else:
+        print("Error: Failed to register the server in any configuration files.")
+
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     parser = argparse.ArgumentParser(
         description="nitrostack-py CLI — Scaffold, develop, and run NitroStack Python MCP servers",
         prog="nitrostack-py"
@@ -285,12 +733,18 @@ def main():
     # init command
     init_parser = subparsers.add_parser("init", help="Initialize a new NitroStack MCP server project")
     init_parser.add_argument("name", help="Name of the project directory to create")
+    init_parser.add_argument("--template", choices=["calculator", "food-delivery", "flight-booking"], default=None, help="Template to use (default: interactive prompt)")
 
     # dev command
     subparsers.add_parser("dev", help="Start the hot-reloading development server")
 
     # start command
     subparsers.add_parser("start", help="Start the production server")
+
+    # register command
+    reg_parser = subparsers.add_parser("register", help="Register server script inside Claude Desktop configuration")
+    reg_parser.add_argument("--name", default=os.path.basename(os.getcwd()), help="Name of the server (defaults to folder name)")
+    reg_parser.add_argument("--file", default="main.py", help="Python script to register (defaults to main.py)")
 
     # generate command
     gen_parser = subparsers.add_parser("generate", help="Generate boilerplate code")
@@ -309,11 +763,13 @@ def main():
         sys.exit(1)
 
     if args.command == "init":
-        init_project(args.name)
+        init_project(args.name, args.template)
     elif args.command == "dev":
         run_dev()
     elif args.command == "start":
         run_start()
+    elif args.command == "register":
+        register_server(args.name, args.file)
     elif args.command == "generate":
         if not args.generator:
             parser.parse_args(["generate", "--help"])
