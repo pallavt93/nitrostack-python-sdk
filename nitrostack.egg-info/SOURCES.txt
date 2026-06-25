@@ -30,5 +30,6 @@ nitrostack/testing/__init__.py
 nitrostack/transports/stdio.py
 tests/test_basic.py
 tests/test_initial_tool.py
+tests/test_oauth.py
 tests/test_production.py
 tests/test_tasks.py

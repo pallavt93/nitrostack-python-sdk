@@ -32,3 +32,5 @@ jobs:
         python tests/test_basic.py
         python tests/test_tasks.py
         python tests/test_initial_tool.py
+        python tests/test_oauth.py
+        python tests/test_production.py
