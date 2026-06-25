@@ -1,3 +1,17 @@
+# Flight Booking MCP Server Example (with OAuth 2.1)
+#
+# This example demonstrates how to protect MCP tools using OAuth 2.1.
+# The tools 'book_flight' and 'get_booking_details' are protected by the @use_guards(OAuthGuard)
+# decorator, requiring a valid OAuth token from the configured introspection endpoint or JWKS provider.
+#
+# To run this example, configure the OAuth settings in your .env file:
+#   PORT=8000
+#   OAUTH_INTROSPECTION_ENDPOINT=http://localhost:3000/oauth/introspect
+#   # Or using JWKS:
+#   # JWKS_URI=http://localhost:3000/oauth/jwks
+#   # TOKEN_AUDIENCE=flight-booking-service
+#   # TOKEN_ISSUER=http://localhost:3000/oauth
+
 import asyncio
 import os
 import sys

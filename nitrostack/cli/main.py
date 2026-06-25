@@ -322,6 +322,34 @@ class FlightBookingController:
         return self.service.get_booking(input.booking_id)
 """
 
+OAUTH_SETUP_TEMPLATE = """# OAuth 2.1 Server Setup Guide
+
+To run your flight booking MCP server with OAuth 2.1 protection, you need to configure an OAuth authorization server (like Keycloak, Auth0, Hydra, or a local mock OAuth server).
+
+## 1. Local Configuration
+
+Add the following environment variables to your `.env` file to configure resource protection:
+
+```env
+# Introspection endpoint to validate access tokens
+OAUTH_INTROSPECTION_ENDPOINT=http://localhost:3000/oauth/introspect
+
+# Or use JWKS (JSON Web Key Sets) to cryptographically verify signatures locally
+# JWKS_URI=http://localhost:3000/oauth/jwks
+# TOKEN_AUDIENCE=flight-booking-service
+# TOKEN_ISSUER=http://localhost:3000/oauth
+```
+
+## 2. Protected Routes
+
+The tools in this server use the `@use_guards(OAuthGuard)` decorator to automatically protect endpoints:
+* **`search_flights`**: Public (no guard).
+* **`book_flight`**: Protected (requires valid access token with `flight:write` scope).
+* **`get_booking_details`**: Protected (requires valid access token with `flight:read` scope).
+
+When calling protected tools, the client must pass a valid Bearer token in the `Authorization` header.
+"""
+
 ENV_TEMPLATE = """PORT=8000
 NODE_ENV=development
 """
@@ -463,6 +491,8 @@ def init_project(name: str, template: str = None):
             f.write(FLIGHT_BOOKING_SERVICE_TEMPLATE)
         with open(os.path.join(name, "modules", "flight_booking", "flight_booking_tools.py"), "w", encoding="utf-8") as f:
             f.write(FLIGHT_BOOKING_TOOLS_TEMPLATE)
+        with open(os.path.join(name, "OAUTH_SETUP.md"), "w", encoding="utf-8") as f:
+            f.write(OAUTH_SETUP_TEMPLATE)
             
     with open(os.path.join(name, "main.py"), "w", encoding="utf-8") as f:
         f.write(MAIN_TEMPLATE)
@@ -488,6 +518,7 @@ def init_project(name: str, template: str = None):
     print(f" 1. \033[34mcd {name}\033[0m")
     if template == "flight-booking":
         print(" 2. Configure OAuth credentials in your \033[34m.env\033[0m file")
+        print("    See \033[34mOAUTH_SETUP.md\033[0m for provider guides")
     else:
         print(" 2. Configure environment variables in \033[34m.env\033[0m")
     print(" 3. Start development server: \033[34mnitrostack-py dev\033[0m (or `python -m nitrostack.cli.main dev`)")
