@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: nitrostack
-Version: 0.1.0
+Version: 0.3.1
 Summary: NitroStack Python SDK — A Python-idiomatic port of the NitroStack MCP framework
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
@@ -24,7 +24,7 @@ A Python-idiomatic port of the **NitroStack** Model Context Protocol (MCP) frame
 - **Asynchronous Background Tasks**: Spawn background workers automatically for long-running tools.
 - **Built-in Authentication**: Modules for API Keys, JWT verification, and OAuth 2.1 (featuring Protected Resource Metadata discovery servers).
 - **In-Process Testing Harness**: Run unit and integration tests against modules without managing subprocesses or real network transports.
-- **CLI Tooling (`nitrostack-py`)**: Scaffold new apps, generate boilerplates, and run hot-reload development servers.
+- **CLI Tooling (`nitrostack-py`)**: Scaffold new apps (`init`), generate boilerplates (`generate`), auto-register servers with Claude (`register`), and run hot-reload development servers (`dev`).
 
 ---
 
@@ -38,6 +38,43 @@ To install local developer or test dependencies:
 ```bash
 pip install -e .
 ```
+
+---
+
+## Scaffolding a New Project (Recommended)
+
+You can quickly scaffold a new project template using the interactive CLI tool:
+
+```bash
+nitrostack-py init my-server
+```
+
+*(Or via Python: `python -m nitrostack.cli.main init my-server`)*
+
+This launches an interactive prompt where you can:
+1. **Choose a template**:
+   - **Starter**: A simple calculator server.
+   - **Advanced**: A food delivery server with items and order status tracking.
+   - **OAuth**: A flight booking server demonstrating OAuth 2.1 authentication and guarded routes.
+2. **Provide metadata**: Specify a custom description and author name.
+
+Once scaffolded, follow the next steps printed by the CLI to run your server, configure environment variables, and try it out.
+
+---
+
+## NitroStudio Dashboard
+
+NitroStudio is an interactive visual developer dashboard for inspecting, graphing, and testing your MCP servers.
+
+To launch the dashboard, execute:
+```bash
+nitrostack-studio
+```
+If your Python scripts directory is not configured in your system `PATH`, you can run it via Python:
+```bash
+python -m nitrostack.studio
+```
+This launches the interface in your default web browser, allowing you to traverse directories, visualize your dependency graph, test tool execution forms, chat with a local mock LLM, and inspect RPC logs.
 
 ---
 
@@ -143,6 +180,15 @@ The SDK reads standard settings from the environment or `.env` files:
 ---
 
 ## Developing & Testing
+
+### Auto-Registering with Claude Desktop
+To automatically configure your server script with Claude Desktop without any manual editing:
+```bash
+nitrostack-py register --name my-mcp-server --file app.py
+```
+*(If your scripts folder is not in PATH, use: `python -m nitrostack.cli.main register --name my-mcp-server --file app.py`)*
+
+This detects all standard and Windows Store installation directories, sets up virtualenv executables, and writes the JSON configuration. Once registered, simply restart Claude Desktop.
 
 ### Running Tests
 To run the automated test suite, execute:

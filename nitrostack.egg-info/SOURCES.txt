@@ -1,7 +1,7 @@
-PYTHON_SDK_SPEC.md
 README.md
 pyproject.toml
 nitrostack/__init__.py
+nitrostack/studio.py
 nitrostack.egg-info/PKG-INFO
 nitrostack.egg-info/SOURCES.txt
 nitrostack.egg-info/dependency_links.txt
@@ -23,6 +23,9 @@ nitrostack/core/module.py
 nitrostack/core/pipeline.py
 nitrostack/core/task.py
 nitrostack/events/event_emitter.py
+nitrostack/static/app.js
+nitrostack/static/index.html
+nitrostack/static/styles.css
 nitrostack/testing/__init__.py
 nitrostack/transports/stdio.py
 tests/test_basic.py

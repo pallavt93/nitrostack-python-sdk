@@ -668,9 +668,13 @@ async def detect_projects(request):
     return JSONResponse({"projects": detected})
 
 
+STUDIO_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.normpath(os.path.join(STUDIO_DIR, "static"))
+
 async def get_index(request):
-    if os.path.exists("static/index.html"):
-        with open("static/index.html", "r", encoding="utf-8") as f:
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
             return HTMLResponse(f.read())
     return HTMLResponse("<h3>NitroStudio static frontend directory is not created yet.</h3>")
 
@@ -700,7 +704,7 @@ routes = [
     Route("/api/get-prompt", get_prompt, methods=["POST"]),
     Route("/api/chat", chat, methods=["POST"]),
     WebSocketRoute("/ws/logs", websocket_logs),
-    Mount("/static", StaticFiles(directory="static"), name="static"),
+    Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
     Route("/", get_index, methods=["GET"]),
 ]
 
@@ -734,5 +738,13 @@ def start_server(port: int = 8000) -> None:
     uvicorn.run(app, host="127.0.0.1", port=resolved_port, log_level="warning")
 
 
+def start_server_cli() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="NitroStudio — Visual dashboard for NitroStack MCP servers")
+    parser.add_argument("--port", type=int, default=8000, help="Port to run NitroStudio on")
+    args = parser.parse_args()
+    start_server(port=args.port)
+
+
 if __name__ == "__main__":
-    start_server(port=8000)
+    start_server_cli()
