@@ -25,9 +25,13 @@ class NitroTestingModule:
             raise RuntimeError("Application has not been bootstrapped.")
         res = await self.app.mcp_server.call_tool(name, arguments)
         
-        # FastMCP returns a list of ContentBlocks. Let's unpack the first TextContent.
-        if isinstance(res, list) and len(res) > 0:
-            block = res[0]
+        # FastMCP returns a list of ContentBlocks, or a tuple of (list[ContentBlock], meta)
+        content_list = res
+        if isinstance(res, tuple) and len(res) > 0:
+            content_list = res[0]
+
+        if isinstance(content_list, list) and len(content_list) > 0:
+            block = content_list[0]
             if hasattr(block, "text"):
                 text_val = block.text
                 import json
@@ -45,10 +49,12 @@ class NitroTestingModule:
         
         # FastMCP returns a list of ReadResourceContents or a result object
         content_list = []
-        if isinstance(res, list):
-            content_list = res
-        elif hasattr(res, "contents"):
-            content_list = res.contents
+        res_obj = res[0] if isinstance(res, tuple) and len(res) > 0 else res
+        
+        if isinstance(res_obj, list):
+            content_list = res_obj
+        elif hasattr(res_obj, "contents"):
+            content_list = res_obj.contents
 
         if content_list and len(content_list) > 0:
             content_block = content_list[0]
@@ -71,7 +77,10 @@ class NitroTestingModule:
         if not self.app.mcp_server:
             raise RuntimeError("Application has not been bootstrapped.")
         res = await self.app.mcp_server.get_prompt(name, arguments)
+        
+        res_obj = res[0] if isinstance(res, tuple) and len(res) > 0 else res
+        
         # FastMCP get_prompt returns a GetPromptResult which has messages list
-        if hasattr(res, "messages"):
-            return res.messages
+        if hasattr(res_obj, "messages"):
+            return res_obj.messages
         return res

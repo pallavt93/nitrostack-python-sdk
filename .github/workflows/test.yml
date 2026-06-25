@@ -31,7 +31,7 @@ jobs:
 
     - name: Print Dependency Versions
       run: |
-        python -c "import pydantic, mcp, sys; print('Python version:', sys.version); print('Pydantic version:', pydantic.__version__); print('mcp version:', mcp.__version__ if hasattr(mcp, '__version__') else 'unknown')"
+        python -c "import pydantic, mcp, sys; print('Python version:', sys.version); print('Pydantic version:', pydantic.__version__); print('mcp version:', mcp.__version__ if hasattr(mcp, '__version__') else 'unknown')" > versions_${{ matrix.python-version }}.log 2>&1
 
     - name: Run Integration Tests
       run: |
