@@ -9,8 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -29,27 +27,8 @@ jobs:
         pip install pytest
         pip install -e .
 
-    - name: Print Dependency Versions
-      run: |
-        python -c "import pydantic, mcp, sys; print('Python version:', sys.version); print('Pydantic version:', pydantic.__version__); print('mcp version:', mcp.__version__ if hasattr(mcp, '__version__') else 'unknown')" > versions_${{ matrix.python-version }}.log 2>&1
-
     - name: Run Integration Tests
       run: |
-        python tests/test_basic.py > test_basic_${{ matrix.python-version }}.log 2>&1; r1=$?
-        python tests/test_tasks.py > test_tasks_${{ matrix.python-version }}.log 2>&1; r2=$?
-        python tests/test_initial_tool.py > test_initial_tool_${{ matrix.python-version }}.log 2>&1; r3=$?
-        if [ $r1 -ne 0 ] || [ $r2 -ne 0 ] || [ $r3 -ne 0 ]; then
-          exit 1
-        fi
-
-    - name: Push Logs on Failure
-      if: failure()
-      run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
-        git checkout -B ci-logs
-        mkdir -p ci-logs
-        cp *.log ci-logs/ 2>/dev/null || true
-        git add ci-logs/
-        git commit -m "chore: upload CI logs for Python ${{ matrix.python-version }} [skip ci]"
-        git push origin ci-logs --force
+        python tests/test_basic.py
+        python tests/test_tasks.py
+        python tests/test_initial_tool.py
